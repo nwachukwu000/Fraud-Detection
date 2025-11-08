@@ -21,8 +21,10 @@ import { transactionsApi } from "@/lib/api";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { isAxiosError } from "axios";
+import { useNavigate } from "react-router-dom";
 
 export default function Transactions() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -272,7 +274,12 @@ export default function Transactions() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Button variant="link" size="sm" className="text-primary">
+                              <Button 
+                                variant="link" 
+                                size="sm" 
+                                className="text-primary"
+                                onClick={() => navigate(`/transactions/${transaction.id}`)}
+                              >
                                 View Details
                               </Button>
                             </TableCell>

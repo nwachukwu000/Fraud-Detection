@@ -39,8 +39,15 @@ public class UsersController : ControllerBase
             EmailConfirmed = true
         };
 
-        // Create user with a default password - in production, send password reset email
-        var result = await _userManager.CreateAsync(user, "TempPassword123!");
+        // Validate password
+        if (string.IsNullOrWhiteSpace(req.Password))
+            return BadRequest(new { message = "Password is required" });
+
+        if (req.Password.Length < 6)
+            return BadRequest(new { message = "Password must be at least 6 characters long" });
+
+        // Create user with the provided password
+        var result = await _userManager.CreateAsync(user, req.Password);
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
@@ -132,7 +139,7 @@ public class UsersController : ControllerBase
     [Authorize]
     public IActionResult GetRoles()
     {
-        return Ok(new[] { "Admin", "Analyst", "Investigator", "Viewer" });
+        return Ok(new[] { "Admin", "Analyst", "Viewer" });
     }
 
     [HttpPost("{userId:guid}/roles")]
@@ -203,7 +210,7 @@ public class UsersController : ControllerBase
     }
 }
 
-public record UserRequest(string Email, string FullName, string Role);
+public record UserRequest(string Email, string FullName, string Role, string Password);
 public record UserUpdateRequest(string? Email, string? FullName);
 public record RoleRequest(string Role);
 

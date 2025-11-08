@@ -1,3 +1,4 @@
+using FDMA.Application.DTOs;
 using FDMA.Domain.Entities;
 
 namespace FDMA.Application.Interfaces;
@@ -10,6 +11,7 @@ public interface ITransactionService
         DateTime? from, DateTime? to,
         int? minRisk);
     Task<Transaction?> GetByIdAsync(Guid id);
+    Task<TransactionDetailsResponse?> GetDetailsByIdAsync(Guid id);
     Task<IEnumerable<Transaction>> GetByAccountAsync(string accountNumber);
     Task<Transaction> CreateAsync(Transaction tx);
     Task FlagAsync(Guid id, bool isFlagged);

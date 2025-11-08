@@ -55,9 +55,28 @@ export interface Transaction {
   status: string;
   location?: string;
   device?: string;
+  ipAddress?: string;
   createdAt: string;
   amount: number;
   riskScore: number;
+}
+
+export interface TriggeredRule {
+  ruleName: string;
+  description: string;
+}
+
+export interface CustomerInfo {
+  name: string;
+  accountNumber: string;
+  customerSince: string;
+  avgTransactionValue: number;
+}
+
+export interface TransactionDetails extends Transaction {
+  triggeredRules: TriggeredRule[];
+  senderInfo?: CustomerInfo;
+  receiverInfo?: CustomerInfo;
 }
 
 export interface TransactionListResponse {
@@ -130,6 +149,11 @@ export const transactionsApi = {
     return response.data;
   },
 
+  getDetails: async (id: string): Promise<TransactionDetails> => {
+    const response = await api.get<TransactionDetails>(`/transactions/${id}/details`);
+    return response.data;
+  },
+
   getByAccount: async (accountNumber: string): Promise<Transaction[]> => {
     const response = await api.get<Transaction[]>(`/transactions/account/${accountNumber}`);
     return response.data;
@@ -142,6 +166,7 @@ export const transactionsApi = {
     amount: number;
     location?: string;
     device?: string;
+    ipAddress?: string;
   }): Promise<Transaction> => {
     const response = await api.post<Transaction>('/transactions', data);
     return response.data;
@@ -202,6 +227,7 @@ export const usersApi = {
     email: string;
     fullName: string;
     role: string;
+    password: string;
   }): Promise<User> => {
     const response = await api.post<User>('/users', data);
     return response.data;

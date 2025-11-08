@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, UserPlus, Edit2, Trash2, Loader2 } from "lucide-react";
+import { Search, UserPlus, Edit2, Trash2, Loader2, Eye, EyeOff } from "lucide-react";
 import { usersApi, User } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -36,7 +36,8 @@ export default function UserManagement() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [createForm, setCreateForm] = useState({ email: "", fullName: "", role: "" });
+  const [createForm, setCreateForm] = useState({ email: "", fullName: "", role: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [editForm, setEditForm] = useState({ email: "", fullName: "", role: "" });
   const [newRole, setNewRole] = useState("");
   const { toast } = useToast();
@@ -113,13 +114,14 @@ export default function UserManagement() {
 
   // Create user mutation
   const createMutation = useMutation({
-    mutationFn: (data: { email: string; fullName: string; role: string }) =>
+    mutationFn: (data: { email: string; fullName: string; role: string; password: string }) =>
       usersApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["all-users"] });
       setIsCreateDialogOpen(false);
-      setCreateForm({ email: "", fullName: "", role: "" });
+      setCreateForm({ email: "", fullName: "", role: "", password: "" });
+      setShowPassword(false);
       toast({
         title: "Success",
         description: "User created successfully",
@@ -236,10 +238,18 @@ export default function UserManagement() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.email || !createForm.fullName || !createForm.role) {
+    if (!createForm.email || !createForm.fullName || !createForm.role || !createForm.password) {
       toast({
         title: "Error",
-        description: "Please fill in all fields",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (createForm.password.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
         variant: "destructive",
       });
       return;
@@ -484,6 +494,36 @@ export default function UserManagement() {
                     onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
                     required
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password *</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter password (min. 6 characters)"
+                      value={createForm.password}
+                      onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                      required
+                      minLength={6}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Password must be at least 6 characters long
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="role">Role</Label>

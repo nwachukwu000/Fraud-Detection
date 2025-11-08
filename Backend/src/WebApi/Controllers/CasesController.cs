@@ -16,7 +16,7 @@ public class CasesController : ControllerBase
     public CasesController(AppDbContext db) => _db = db;
 
     [HttpPost]
-    [Authorize(Roles = "Admin,Analyst,Investigator")]
+    [Authorize(Roles = "Admin,Analyst")]
     public async Task<IActionResult> Create([FromBody] CaseRequest req)
     {
         // Verify transaction exists and has risk score > 0
@@ -73,7 +73,7 @@ public class CasesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin,Analyst,Investigator")]
+    [Authorize(Roles = "Admin,Analyst")]
     public async Task<IActionResult> Update(Guid id, [FromBody] CaseUpdateRequest req)
     {
         var caseEntity = await _db.Cases.FindAsync(id);
@@ -90,6 +90,7 @@ public class CasesController : ControllerBase
     }
 
     [HttpPut("{id:guid}/status")]
+    [Authorize(Roles = "Admin,Analyst")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] CaseStatusUpdateRequest req)
     {
         var caseEntity = await _db.Cases.FindAsync(id);

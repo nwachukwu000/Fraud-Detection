@@ -1,3 +1,4 @@
+using FDMA.Application.DTOs;
 using FDMA.Application.Interfaces;
 using FDMA.Application.Services;
 using FDMA.Domain.Entities;
@@ -60,6 +61,114 @@ public class TransactionService : ITransactionService
         var rules = await _db.Rules.AsNoTracking().Where(r => r.IsEnabled).ToListAsync();
         ApplyRiskScores(new[] { tx }, rules);
         return tx;
+    }
+
+    public async Task<TransactionDetailsResponse?> GetDetailsByIdAsync(Guid id)
+    {
+        var tx = await _db.Transactions
+            .Include(t => t.Alerts)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id);
+        
+        if (tx is null) return null;
+
+        // Compute risk score
+        var rules = await _db.Rules.AsNoTracking().Where(r => r.IsEnabled).ToListAsync();
+        ApplyRiskScores(new[] { tx }, rules);
+
+        // Get triggered rules from alerts and active rules
+        var triggeredRules = new List<TriggeredRule>();
+        
+        // Get alerts for this transaction
+        var alerts = await _db.Alerts
+            .Where(a => a.TransactionId == id)
+            .AsNoTracking()
+            .ToListAsync();
+
+        // Get rules that were triggered based on current evaluation
+        foreach (var rule in rules)
+        {
+            var fieldValue = rule.Field.ToLowerInvariant() switch
+            {
+                "amount" => tx.Amount.ToString(),
+                "device" => tx.Device ?? "",
+                "location" => tx.Location ?? "",
+                "transactiontype" => tx.TransactionType,
+                _ => ""
+            };
+            
+            bool match = rule.Condition.ToLowerInvariant() switch
+            {
+                "greaterthan" when decimal.TryParse(fieldValue, out var v) && decimal.TryParse(rule.Value, out var th) => v > th,
+                "equals" => string.Equals(fieldValue, rule.Value, StringComparison.OrdinalIgnoreCase),
+                "in" => rule.Value.Split(',').Select(s => s.Trim()).Contains(fieldValue, StringComparer.OrdinalIgnoreCase),
+                "notin" => !rule.Value.Split(',').Select(s => s.Trim()).Contains(fieldValue, StringComparer.OrdinalIgnoreCase),
+                _ => false
+            };
+
+            if (match)
+            {
+                string description = rule.Field.ToLowerInvariant() switch
+                {
+                    "amount" when decimal.TryParse(rule.Value, out var threshold) => 
+                        $"Transaction amount (₦{tx.Amount:N2}) exceeded the ₦{threshold:N2} threshold.",
+                    "device" => $"Transaction was made from a new or suspicious device: {tx.Device}",
+                    "location" => $"Transaction originated from a flagged location: {tx.Location}",
+                    "transactiontype" => $"Transaction type '{tx.TransactionType}' triggered the rule.",
+                    _ => $"{rule.Name} rule was triggered."
+                };
+                triggeredRules.Add(new TriggeredRule(rule.Name, description));
+            }
+        }
+
+        // Also check for "New Payee - High Value" type rules
+        // Check if this is first transaction to this receiver
+        var isFirstTransactionToReceiver = !await _db.Transactions
+            .AnyAsync(t => t.SenderAccountNumber == tx.SenderAccountNumber 
+                && t.ReceiverAccountNumber == tx.ReceiverAccountNumber 
+                && t.Id != tx.Id);
+        
+        if (isFirstTransactionToReceiver && tx.Amount > 100000)
+        {
+            triggeredRules.Add(new TriggeredRule(
+                "New Payee - High Value",
+                $"First-time payment to this recipient exceeded the ₦100,000.00 threshold."
+            ));
+        }
+
+        // Get customer info (mock data for now - in real app, this would come from a customer service)
+        var senderInfo = await GetCustomerInfoAsync(tx.SenderAccountNumber);
+        var receiverInfo = await GetCustomerInfoAsync(tx.ReceiverAccountNumber);
+
+        return TransactionDetailsResponse.FromEntity(tx, triggeredRules, senderInfo, receiverInfo);
+    }
+
+    private async Task<CustomerInfo?> GetCustomerInfoAsync(string accountNumber)
+    {
+        // Get first transaction date for this account to determine customer since date
+        var firstTransaction = await _db.Transactions
+            .Where(t => t.SenderAccountNumber == accountNumber || t.ReceiverAccountNumber == accountNumber)
+            .OrderBy(t => t.CreatedAt)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (firstTransaction is null) return null;
+
+        // Calculate average transaction value
+        var avgValue = await _db.Transactions
+            .Where(t => t.SenderAccountNumber == accountNumber || t.ReceiverAccountNumber == accountNumber)
+            .AsNoTracking()
+            .AverageAsync(t => (double)t.Amount);
+
+        // Generate a mock name based on account number (in real app, this would come from customer service)
+        var name = $"Customer {accountNumber.Substring(Math.Max(0, accountNumber.Length - 5))}";
+
+        return new CustomerInfo(
+            name,
+            accountNumber,
+            firstTransaction.CreatedAt,
+            (decimal)avgValue
+        );
     }
 
     public async Task<IEnumerable<Transaction>> GetByAccountAsync(string accountNumber)

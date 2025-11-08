@@ -9,7 +9,7 @@ public static class DbSeeder
     public static async Task SeedAsync(AppDbContext db, UserManager<User> userManager, RoleManager<IdentityRole<Guid>> roleManager)
     {
         // Create roles if they don't exist
-        var roles = new[] { "Admin", "Analyst", "Investigator", "Viewer" };
+        var roles = new[] { "Admin", "Analyst", "Viewer" };
         foreach (var roleName in roles)
         {
             if (!await roleManager.RoleExistsAsync(roleName))
@@ -20,7 +20,7 @@ public static class DbSeeder
         if (!await db.Rules.AnyAsync())
         {
             db.Rules.AddRange(
-                new Rule { Id = Guid.NewGuid(), Name = "High Value Transaction", Field = "Amount", Condition = "GreaterThan", Value = "500000", IsEnabled = true },
+                new Rule { Id = Guid.NewGuid(), Name = "High Amount Transaction", Field = "Amount", Condition = "GreaterThan", Value = "200000", IsEnabled = true },
                 new Rule { Id = Guid.NewGuid(), Name = "New Device + Large Transfer", Field = "Device", Condition = "Equals", Value = "NewDevice", IsEnabled = false }
             );
         }
@@ -38,6 +38,7 @@ public static class DbSeeder
                     Amount = 100000 + i*50000,
                     Device = i%3==0 ? "NewDevice" : "iOS",
                     Location = i%2==0 ? "NG-LAGOS" : "NG-ABUJA",
+                    IpAddress = $"192.168.1.{100 + i}",
                     Status = "Completed",
                     RiskScore = 0
                 });

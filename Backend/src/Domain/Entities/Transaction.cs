@@ -10,6 +10,7 @@ public class Transaction
     public string Status { get; set; } = "Completed"; // Pending, Completed, Failed, Reversed
     public string? Location { get; set; }
     public string? Device { get; set; }
+    public string? IpAddress { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public decimal Amount { get; set; }
     public int RiskScore { get; set; }
