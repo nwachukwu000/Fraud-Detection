@@ -300,6 +300,87 @@ export const rulesApi = {
   },
 };
 
+// Comments
+export interface Comment {
+  id: string;
+  content: string;
+  transactionId?: string;
+  caseId?: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  isInternal: boolean;
+}
+
+export const commentsApi = {
+  getByTransaction: async (transactionId: string): Promise<Comment[]> => {
+    const response = await api.get<Comment[]>(`/comments/transaction/${transactionId}`);
+    return response.data;
+  },
+
+  getByCase: async (caseId: string): Promise<Comment[]> => {
+    const response = await api.get<Comment[]>(`/comments/case/${caseId}`);
+    return response.data;
+  },
+
+  createForTransaction: async (transactionId: string, data: {
+    content: string;
+    isInternal?: boolean;
+  }): Promise<Comment> => {
+    const response = await api.post<Comment>(`/comments/transaction/${transactionId}`, data);
+    return response.data;
+  },
+
+  createForCase: async (caseId: string, data: {
+    content: string;
+    isInternal?: boolean;
+  }): Promise<Comment> => {
+    const response = await api.post<Comment>(`/comments/case/${caseId}`, data);
+    return response.data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/comments/${id}`);
+  },
+};
+
+// Audit Logs
+export interface AuditLog {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string;
+  userName: string;
+  details?: string;
+  createdAt: string;
+}
+
+export interface AuditLogListResponse {
+  total: number;
+  items: AuditLog[];
+}
+
+export const auditLogsApi = {
+  getList: async (params?: {
+    page?: number;
+    pageSize?: number;
+    entityType?: string;
+    entityId?: string;
+  }): Promise<AuditLogListResponse> => {
+    const response = await api.get<AuditLogListResponse>('/auditlogs', { params });
+    return response.data;
+  },
+
+  getByEntity: async (entityType: string, entityId: string, params?: {
+    page?: number;
+    pageSize?: number;
+  }): Promise<AuditLogListResponse> => {
+    const response = await api.get<AuditLogListResponse>(`/auditlogs/entity/${entityType}/${entityId}`, { params });
+    return response.data;
+  },
+};
+
 // Auth
 export const authApi = {
   login: async (email: string, password: string): Promise<{ token: string; user: User }> => {

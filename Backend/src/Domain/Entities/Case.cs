@@ -15,4 +15,5 @@ public class Case
     public CaseStatus Status { get; set; } = CaseStatus.Open;
 
     public ICollection<Alert> Alerts { get; set; } = new List<Alert>();
+    public ICollection<Comment> Comments { get; set; } = new List<Comment>();
 }

@@ -10,7 +10,7 @@ namespace FDMA.WebApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class CasesController : ControllerBase
+public class CasesController : BaseController
 {
     private readonly AppDbContext _db;
     public CasesController(AppDbContext db) => _db = db;
@@ -43,7 +43,11 @@ public class CasesController : ControllerBase
         };
 
         _db.Cases.Add(caseEntity);
+        
+        CreateAuditLog(_db, "Case Created", "Case", caseEntity.Id, 
+            $"Title: {req.Title}, Transaction: {req.TransactionId}");
         await _db.SaveChangesAsync();
+        
         return CreatedAtAction(nameof(GetById), new { id = caseEntity.Id }, CaseResponse.FromEntity(caseEntity));
     }
 
@@ -85,7 +89,10 @@ public class CasesController : ControllerBase
         if (req.Status.HasValue) caseEntity.Status = req.Status.Value;
         caseEntity.UpdatedAt = DateTime.UtcNow;
 
+        CreateAuditLog(_db, "Case Updated", "Case", id, 
+            $"Status: {caseEntity.Status}, Title: {caseEntity.Title}");
         await _db.SaveChangesAsync();
+        
         return Ok(CaseResponse.FromEntity(caseEntity));
     }
 
@@ -99,7 +106,10 @@ public class CasesController : ControllerBase
         caseEntity.Status = req.Status;
         caseEntity.UpdatedAt = DateTime.UtcNow;
 
+        CreateAuditLog(_db, "Case Status Updated", "Case", id, 
+            $"New Status: {req.Status}");
         await _db.SaveChangesAsync();
+        
         return Ok(CaseResponse.FromEntity(caseEntity));
     }
 
@@ -110,6 +120,8 @@ public class CasesController : ControllerBase
         var caseEntity = await _db.Cases.FindAsync(id);
         if (caseEntity is null) return NotFound();
         
+        CreateAuditLog(_db, "Case Deleted", "Case", id, 
+            $"Title: {caseEntity.Title}");
         _db.Cases.Remove(caseEntity);
         await _db.SaveChangesAsync();
         return NoContent();

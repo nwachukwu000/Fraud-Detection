@@ -270,7 +270,7 @@ export default function Transactions() {
                               <Badge
                                 variant={transaction.isFlagged ? "destructive" : "secondary"}
                               >
-                                {transaction.isFlagged ? "Flagged" : transaction.status}
+                                {transaction.isFlagged ? "Flagged" : "Normal"}
                               </Badge>
                             </TableCell>
                             <TableCell>

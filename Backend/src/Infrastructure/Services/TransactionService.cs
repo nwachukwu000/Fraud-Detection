@@ -19,7 +19,9 @@ public class TransactionService : ITransactionService
         {
             var risk = RuleEngine.ComputeRiskScore(tx, rules);
             tx.RiskScore = risk;
-            tx.IsFlagged = risk >= 70;
+            tx.IsFlagged = risk > 0;
+            // Update status based on flagged status
+            tx.Status = tx.IsFlagged ? "Flagged" : "Normal";
         }
     }
 
@@ -36,7 +38,7 @@ public class TransactionService : ITransactionService
             {
                 Id = Guid.NewGuid(),
                 TransactionId = tx.Id,
-                Severity = tx.RiskScore >= 90 ? FDMA.Domain.Enums.AlertSeverity.High : FDMA.Domain.Enums.AlertSeverity.Medium,
+                Severity = tx.RiskScore >= 80 ? FDMA.Domain.Enums.AlertSeverity.High : tx.RiskScore >= 50 ? FDMA.Domain.Enums.AlertSeverity.Medium : FDMA.Domain.Enums.AlertSeverity.Low,
                 Status = FDMA.Domain.Enums.AlertStatus.Pending,
                 RuleName = "RuleEngine:AutoFlag",
                 CreatedAt = DateTime.UtcNow
@@ -51,6 +53,7 @@ public class TransactionService : ITransactionService
         var t = await _db.Transactions.FindAsync(id);
         if (t is null) return;
         t.IsFlagged = isFlagged;
+        t.Status = isFlagged ? "Flagged" : "Normal";
         await _db.SaveChangesAsync();
     }
 
@@ -185,7 +188,24 @@ public class TransactionService : ITransactionService
     public async Task<(IEnumerable<Transaction> items, int total)> GetPagedAsync(int page, int pageSize, string? status, string? account, string? type, DateTime? from, DateTime? to, int? minRisk)
     {
         var q = _db.Transactions.AsNoTracking().AsQueryable();
-        if (!string.IsNullOrWhiteSpace(status)) q = q.Where(t => t.Status == status);
+        // Handle status filter - map "normal" and "flagged" to IsFlagged property
+        // Note: Status will be updated by ApplyRiskScores after filtering
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (status.Equals("normal", StringComparison.OrdinalIgnoreCase))
+            {
+                q = q.Where(t => !t.IsFlagged);
+            }
+            else if (status.Equals("flagged", StringComparison.OrdinalIgnoreCase))
+            {
+                q = q.Where(t => t.IsFlagged);
+            }
+            else
+            {
+                // For backward compatibility, also check status field
+                q = q.Where(t => t.Status == status || (status == "Normal" && !t.IsFlagged) || (status == "Flagged" && t.IsFlagged));
+            }
+        }
         if (!string.IsNullOrWhiteSpace(account)) q = q.Where(t => t.SenderAccountNumber == account || t.ReceiverAccountNumber == account);
         if (!string.IsNullOrWhiteSpace(type)) q = q.Where(t => t.TransactionType == type);
         if (from.HasValue) q = q.Where(t => t.CreatedAt >= from.Value);

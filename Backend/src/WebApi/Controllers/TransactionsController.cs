@@ -1,18 +1,25 @@
 using FDMA.Application.DTOs;
 using FDMA.Application.Interfaces;
 using FDMA.Domain.Entities;
+using FDMA.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace FDMA.WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class TransactionsController : ControllerBase
+public class TransactionsController : BaseController
 {
     private readonly ITransactionService _service;
-    public TransactionsController(ITransactionService service) => _service = service;
+    private readonly AppDbContext _db;
+    public TransactionsController(ITransactionService service, AppDbContext db)
+    {
+        _service = service;
+        _db = db;
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetList([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
@@ -56,9 +63,14 @@ public class TransactionsController : ControllerBase
             Device = req.Device,
             IpAddress = req.IpAddress,
             CreatedAt = DateTime.UtcNow,
-            Status = "Completed"
+            Status = "Normal" // Will be updated by CreateAsync based on risk score
         };
         var created = await _service.CreateAsync(t);
+        
+        CreateAuditLog(_db, "Transaction Created", "Transaction", created.Id, 
+            $"Amount: {req.Amount}, Type: {req.TransactionType}");
+        await _db.SaveChangesAsync();
+        
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, TransactionResponse.FromEntity(created));
     }
 
@@ -66,6 +78,11 @@ public class TransactionsController : ControllerBase
     public async Task<IActionResult> Flag(Guid id, [FromQuery] bool isFlagged = true)
     {
         await _service.FlagAsync(id, isFlagged);
+        
+        CreateAuditLog(_db, isFlagged ? "Transaction Flagged" : "Transaction Unflagged", 
+            "Transaction", id, $"Flagged: {isFlagged}");
+        await _db.SaveChangesAsync();
+        
         return NoContent();
     }
 }

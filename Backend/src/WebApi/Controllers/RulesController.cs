@@ -9,7 +9,7 @@ namespace FDMA.WebApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class RulesController : ControllerBase
+public class RulesController : BaseController
 {
     private readonly AppDbContext _db;
     public RulesController(AppDbContext db) => _db = db;
@@ -29,7 +29,11 @@ public class RulesController : ControllerBase
             CreatedAt = DateTime.UtcNow
         };
         _db.Rules.Add(rule);
+        
+        CreateAuditLog(_db, "Rule Created", "Rule", rule.Id, 
+            $"Name: {req.Name}, Field: {req.Field}, Condition: {req.Condition}");
         await _db.SaveChangesAsync();
+        
         return CreatedAtAction(nameof(GetById), new { id = rule.Id }, rule);
     }
 
@@ -46,7 +50,10 @@ public class RulesController : ControllerBase
         rule.Value = req.Value;
         if (req.IsEnabled.HasValue) rule.IsEnabled = req.IsEnabled.Value;
 
+        CreateAuditLog(_db, "Rule Updated", "Rule", id, 
+            $"Name: {req.Name}, Enabled: {rule.IsEnabled}");
         await _db.SaveChangesAsync();
+        
         return Ok(rule);
     }
 
@@ -56,6 +63,9 @@ public class RulesController : ControllerBase
     {
         var rule = await _db.Rules.FindAsync(id);
         if (rule is null) return NotFound();
+        
+        CreateAuditLog(_db, "Rule Deleted", "Rule", id, 
+            $"Name: {rule.Name}");
         _db.Rules.Remove(rule);
         await _db.SaveChangesAsync();
         return NoContent();
@@ -82,7 +92,11 @@ public class RulesController : ControllerBase
         var rule = await _db.Rules.FindAsync(id);
         if (rule is null) return NotFound();
         rule.IsEnabled = !rule.IsEnabled;
+        
+        CreateAuditLog(_db, "Rule Toggled", "Rule", id, 
+            $"Enabled: {rule.IsEnabled}");
         await _db.SaveChangesAsync();
+        
         return Ok(new { isEnabled = rule.IsEnabled });
     }
 }

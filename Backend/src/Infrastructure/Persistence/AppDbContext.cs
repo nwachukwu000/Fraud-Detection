@@ -14,6 +14,8 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     public DbSet<Case> Cases => Set<Case>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Rule> Rules => Set<Rule>();
+    public DbSet<Comment> Comments => Set<Comment>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Search, Download, Loader2 } from "lucide-react";
-import { alertsApi, casesApi, Transaction, Case } from "@/lib/api";
+import { alertsApi, casesApi, Transaction, Case, usersApi, User } from "@/lib/api";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -76,6 +76,24 @@ export default function Alerts() {
   });
 
   const cases = casesData?.items || [];
+
+  // Fetch analysts/investigators for case assignment
+  const { data: analystsData } = useQuery({
+    queryKey: ["analysts"],
+    queryFn: async () => {
+      // Fetch both Analyst and Investigator roles
+      const [analysts, investigators] = await Promise.all([
+        usersApi.getList({ page: 1, pageSize: 1000, role: "Analyst" }),
+        usersApi.getList({ page: 1, pageSize: 1000, role: "Investigator" }).catch(() => ({ items: [] })),
+      ]);
+      // Combine and deduplicate
+      const allAnalysts = [...analysts.items, ...investigators.items];
+      const uniqueAnalysts = Array.from(
+        new Map(allAnalysts.map((u: User) => [u.id, u])).values()
+      );
+      return { items: uniqueAnalysts };
+    },
+  });
 
   const resolveMutation = useMutation({
     mutationFn: async (transactionId: string) => {
@@ -240,6 +258,19 @@ export default function Alerts() {
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
 
+  // Filter transactions by search query
+  const filteredTransactions = transactions.filter((tx) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      tx.id.toLowerCase().includes(query) ||
+      tx.senderAccountNumber.toLowerCase().includes(query) ||
+      tx.receiverAccountNumber.toLowerCase().includes(query) ||
+      (tx.device?.toLowerCase().includes(query) ?? false) ||
+      (tx.location?.toLowerCase().includes(query) ?? false)
+    );
+  });
+
   // Map risk score to severity
   const getSeverityFromRiskScore = (riskScore: number): { label: string; num: number } => {
     if (riskScore >= 80) return { label: "High", num: 2 };
@@ -279,6 +310,112 @@ export default function Alerts() {
     // (since all transactions in alerts have risk score > 0)
     return { label: "Pending", num: 0 };
   };
+
+  const handleExportCSV = async () => {
+    try {
+      // Fetch all alerts matching current filters (not just current page)
+      const exportParams: any = {
+        page: 1,
+        pageSize: 10000, // Get all matching records
+      };
+
+      if (statusFilter) {
+        const statusMap: Record<string, number> = {
+          pending: 0,
+          "under review": 1,
+          escalated: 2,
+          resolved: 3,
+        };
+        exportParams.status = statusMap[statusFilter.toLowerCase()];
+      }
+
+      if (severityFilter !== null) {
+        exportParams.severity = severityFilter;
+      }
+
+      const exportData = await alertsApi.getList(exportParams);
+      let exportTransactions = exportData.items || [];
+
+      // Apply search filter if any
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        exportTransactions = exportTransactions.filter((tx) =>
+          tx.id.toLowerCase().includes(query) ||
+          tx.senderAccountNumber.toLowerCase().includes(query) ||
+          tx.receiverAccountNumber.toLowerCase().includes(query) ||
+          (tx.device?.toLowerCase().includes(query) ?? false) ||
+          (tx.location?.toLowerCase().includes(query) ?? false)
+        );
+      }
+
+      // Prepare CSV data
+      const headers = [
+        "Transaction ID",
+        "Sender Account",
+        "Receiver Account",
+        "Transaction Type",
+        "Amount",
+        "Risk Score",
+        "Severity",
+        "Status",
+        "Device",
+        "Location",
+        "IP Address",
+        "Date",
+        "Case ID",
+      ];
+
+      const rows = exportTransactions.map((tx) => {
+        const severity = getSeverityFromRiskScore(tx.riskScore || 0);
+        const status = getStatusFromTransaction(tx);
+        const caseForTransaction = cases.find((c) => c.transactionId === tx.id);
+        
+        return [
+          tx.id,
+          tx.senderAccountNumber,
+          tx.receiverAccountNumber,
+          tx.transactionType,
+          (tx.amount || 0).toString(),
+          (tx.riskScore || 0).toString(),
+          severity.label,
+          status.label,
+          tx.device || "N/A",
+          tx.location || "N/A",
+          tx.ipAddress || "N/A",
+          format(new Date(tx.createdAt), "yyyy-MM-dd HH:mm:ss"),
+          caseForTransaction?.id || "N/A",
+        ];
+      });
+
+      const csvContent = [headers, ...rows]
+        .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const timestamp = format(new Date(), "yyyy-MM-dd_HH-mm-ss");
+      const filename = `alerts_export_${timestamp}.csv`;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Success",
+        description: `Exported ${exportTransactions.length} alerts to ${filename}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export alerts. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -286,7 +423,7 @@ export default function Alerts() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Alerts & Cases</h1>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExportCSV} disabled={isLoading}>
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -421,7 +558,9 @@ export default function Alerts() {
                           return (
                             tx.id.toLowerCase().includes(query) ||
                             tx.senderAccountNumber.toLowerCase().includes(query) ||
-                            tx.receiverAccountNumber.toLowerCase().includes(query)
+                            tx.receiverAccountNumber.toLowerCase().includes(query) ||
+                            (tx.device?.toLowerCase().includes(query) ?? false) ||
+                            (tx.location?.toLowerCase().includes(query) ?? false)
                           );
                         })
                         .map((transaction) => {
@@ -647,15 +786,33 @@ export default function Alerts() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="investigatorId">Investigator ID (Optional)</Label>
-                  <Input
-                    id="investigatorId"
-                    placeholder="Enter investigator ID"
-                    value={caseForm.investigatorId}
-                    onChange={(e) =>
-                      setCaseForm({ ...caseForm, investigatorId: e.target.value })
+                  <Label htmlFor="investigatorId">Assign analyst</Label>
+                  <Select
+                    value={caseForm.investigatorId || undefined}
+                    onValueChange={(value) =>
+                      setCaseForm({ ...caseForm, investigatorId: value })
                     }
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an analyst to assign this case to (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {analystsData?.items && analystsData.items.length > 0 ? (
+                        analystsData.items.map((analyst: User) => (
+                          <SelectItem key={analyst.id} value={analyst.id}>
+                            {analyst.fullName} ({analyst.email})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          No analysts available
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Select an analyst to assign this case to. Leave unassigned to assign later.
+                  </p>
                 </div>
               </div>
               <DialogFooter>
