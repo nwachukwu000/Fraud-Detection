@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { transactionsApi, alertsApi, casesApi } from "@/lib/api";
 import { format } from "date-fns";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState("24h");
   const [tab, setTab] = useState("all");
 
@@ -309,7 +311,12 @@ export default function Dashboard() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Button variant="link" size="sm">
+                              <Button 
+                                variant="link" 
+                                size="sm"
+                                className="text-primary"
+                                onClick={() => navigate(`/transactions/${transaction.id}`)}
+                              >
                                 View Details
                               </Button>
                             </TableCell>
@@ -389,7 +396,12 @@ export default function Dashboard() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Button variant="link" size="sm">
+                              <Button 
+                                variant="link" 
+                                size="sm"
+                                className="text-primary"
+                                onClick={() => navigate(`/transactions/${transaction.id}`)}
+                              >
                                 View Details
                               </Button>
                             </TableCell>
@@ -469,7 +481,12 @@ export default function Dashboard() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Button variant="link" size="sm">
+                              <Button 
+                                variant="link" 
+                                size="sm"
+                                className="text-primary"
+                                onClick={() => navigate(`/transactions/${transaction.id}`)}
+                              >
                                 View Details
                               </Button>
                             </TableCell>

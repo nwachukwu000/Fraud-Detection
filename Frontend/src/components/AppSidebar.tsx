@@ -1,7 +1,9 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Shield, LayoutDashboard, CreditCard, AlertTriangle, FolderKanban, BarChart3, FileText, Activity, Settings, Users, User as UserIcon, LogOut } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { User as UserType } from "@/lib/api";
+import { User as UserType, alertsApi, casesApi } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -57,6 +59,27 @@ export function AppSidebar() {
     return "U";
   }, [currentUser]);
 
+  // Fetch alerts and cases to calculate count of alerts without cases
+  const { data: alertsData } = useQuery({
+    queryKey: ["sidebar-alerts"],
+    queryFn: () => alertsApi.getList({ page: 1, pageSize: 10000 }),
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  const { data: casesData } = useQuery({
+    queryKey: ["sidebar-cases"],
+    queryFn: () => casesApi.getList({ page: 1, pageSize: 10000 }),
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Calculate count of transactions with alerts but no case
+  const alertsWithoutCaseCount = useMemo(() => {
+    const alerts = alertsData?.items || [];
+    const cases = casesData?.items || [];
+    const caseTransactionIds = new Set(cases.map(c => c.transactionId));
+    return alerts.filter(alert => !caseTransactionIds.has(alert.id)).length;
+  }, [alertsData, casesData]);
+
   return (
     <Sidebar className="border-r-0">
       <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -82,13 +105,23 @@ export function AppSidebar() {
                       to={item.url} 
                       end={item.url === "/"}
                       className={({ isActive }) =>
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        `flex items-center gap-2 ${
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        }`
                       }
                     >
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span className="flex-1">{item.title}</span>
+                      {item.title === "Alerts" && alertsWithoutCaseCount > 0 && (
+                        <Badge 
+                          variant="destructive" 
+                          className="h-5 min-w-5 px-1.5 text-xs"
+                        >
+                          {alertsWithoutCaseCount > 99 ? "99+" : alertsWithoutCaseCount}
+                        </Badge>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

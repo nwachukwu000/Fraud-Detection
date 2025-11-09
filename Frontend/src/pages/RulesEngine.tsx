@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Edit2, Trash2, Loader2 } from "lucide-react";
-import { rulesApi } from "@/lib/api";
+import { rulesApi, Rule } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { isAxiosError } from "axios";
 
@@ -31,6 +31,8 @@ export default function RulesEngine() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [ruleForm, setRuleForm] = useState({
     name: "",
     field: "",
@@ -134,6 +136,48 @@ export default function RulesEngine() {
     },
   });
 
+  const updateRuleMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string; field: string; condition: string; value: string; isEnabled?: boolean } }) =>
+      rulesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+      setIsEditDialogOpen(false);
+      setEditingRule(null);
+      setRuleForm({
+        name: "",
+        field: "",
+        condition: "",
+        value: "",
+        isEnabled: true,
+      });
+      toast({
+        title: "Success",
+        description: "Rule updated successfully",
+      });
+    },
+    onError: (error: unknown) => {
+      let message = "Failed to update rule";
+      if (isAxiosError(error)) {
+        const status = error.response?.status;
+        const backendMessage = (error.response?.data as { message?: string } | undefined)?.message;
+        if (status === 403) {
+          message = "You don't have permission to update rules. Admin role required.";
+        } else if (status === 401) {
+          message = "Please log in to update rules.";
+        } else if (status === 404) {
+          message = "Rule not found.";
+        } else if (backendMessage) {
+          message = backendMessage;
+        }
+      }
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateRule = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ruleForm.name || !ruleForm.field || !ruleForm.condition || !ruleForm.value) {
@@ -145,6 +189,35 @@ export default function RulesEngine() {
       return;
     }
     createRuleMutation.mutate(ruleForm);
+  };
+
+  const handleEdit = (rule: Rule) => {
+    setEditingRule(rule);
+    setRuleForm({
+      name: rule.name,
+      field: rule.field,
+      condition: rule.condition,
+      value: rule.value,
+      isEnabled: rule.isEnabled,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateRule = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRule) return;
+    if (!ruleForm.name || !ruleForm.field || !ruleForm.condition || !ruleForm.value) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateRuleMutation.mutate({
+      id: editingRule.id,
+      data: ruleForm,
+    });
   };
 
   const rulesList = rules || [];
@@ -212,7 +285,12 @@ export default function RulesEngine() {
                       />
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="icon">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(rule)}
+                        title="Edit rule"
+                      >
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
@@ -220,6 +298,7 @@ export default function RulesEngine() {
                         size="icon"
                         onClick={() => handleDelete(rule.id)}
                         disabled={deleteMutation.isPending}
+                        title="Delete rule"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -342,6 +421,134 @@ export default function RulesEngine() {
                     </>
                   ) : (
                     "Create Rule"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Rule Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Rule</DialogTitle>
+              <DialogDescription>
+                Update the fraud detection rule. Changes will be applied to all future transactions.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleUpdateRule}>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editRuleName">Rule Name *</Label>
+                  <Input
+                    id="editRuleName"
+                    placeholder="e.g., High Value Transaction"
+                    value={ruleForm.name}
+                    onChange={(e) =>
+                      setRuleForm({ ...ruleForm, name: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="editRuleField">Field *</Label>
+                    <Select
+                      value={ruleForm.field}
+                      onValueChange={(value) =>
+                        setRuleForm({ ...ruleForm, field: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select field" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Amount">Amount</SelectItem>
+                        <SelectItem value="Device">Device</SelectItem>
+                        <SelectItem value="Location">Location</SelectItem>
+                        <SelectItem value="TransactionType">Transaction Type</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editRuleCondition">Condition *</Label>
+                    <Select
+                      value={ruleForm.condition}
+                      onValueChange={(value) =>
+                        setRuleForm({ ...ruleForm, condition: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select condition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="GreaterThan">Greater Than</SelectItem>
+                        <SelectItem value="LessThan">Less Than</SelectItem>
+                        <SelectItem value="Equals">Equals</SelectItem>
+                        <SelectItem value="NotEquals">Not Equals</SelectItem>
+                        <SelectItem value="Contains">Contains</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editRuleValue">Value *</Label>
+                  <Input
+                    id="editRuleValue"
+                    placeholder="e.g., 1000000 or NewDevice"
+                    value={ruleForm.value}
+                    onChange={(e) =>
+                      setRuleForm({ ...ruleForm, value: e.target.value })
+                    }
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the value to compare against (e.g., amount threshold or device name)
+                  </p>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="editRuleEnabled">Enable Rule</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Rules are automatically applied when enabled
+                    </p>
+                  </div>
+                  <Switch
+                    id="editRuleEnabled"
+                    checked={ruleForm.isEnabled}
+                    onCheckedChange={(checked) =>
+                      setRuleForm({ ...ruleForm, isEnabled: checked })
+                    }
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditDialogOpen(false);
+                    setEditingRule(null);
+                    setRuleForm({
+                      name: "",
+                      field: "",
+                      condition: "",
+                      value: "",
+                      isEnabled: true,
+                    });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateRuleMutation.isPending}>
+                  {updateRuleMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Update Rule"
                   )}
                 </Button>
               </DialogFooter>
