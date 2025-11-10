@@ -8,6 +8,7 @@ public class Transaction
     public string TransactionType { get; set; } = default!; // e.g., Transfer, Card, CashIn
     public bool IsFlagged { get; set; }
     public string Status { get; set; } = "Normal"; // Normal, Flagged
+    public string? Email { get; set; } // Email address for notifications
     public string? Location { get; set; }
     public string? Device { get; set; }
     public string? IpAddress { get; set; }

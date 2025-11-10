@@ -7,6 +7,7 @@ public class Rule
     public string Field { get; set; } = default!; // Amount, Device, Location
     public string Condition { get; set; } = default!; // GreaterThan, Equals, In, NotIn
     public string Value { get; set; } = default!; // "500000", "NG-LAGOS"
+    public int Severity { get; set; }
     public bool IsEnabled { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

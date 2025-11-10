@@ -24,7 +24,7 @@ public class AlertService : IAlertService
         // Compute risk scores for all transactions
         foreach (var tx in transactions)
         {
-            tx.RiskScore = RuleEngine.ComputeRiskScore(tx, rules);
+            tx.RiskScore = RuleEngine.ComputeRiskScore(tx, rules).Score;
             tx.IsFlagged = tx.RiskScore >= 70;
         }
 

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, FileText, AlertTriangle, Loader2, MessageSquare, History, Trash2, Send } from "lucide-react";
+import { ArrowLeft, FileText, AlertTriangle, Loader2, MessageSquare, History, Trash2, Send, Mail } from "lucide-react";
 import { transactionsApi, casesApi, commentsApi, auditLogsApi, Comment } from "@/lib/api";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -88,6 +88,31 @@ export default function TransactionDetails() {
       toast({
         title: "Error",
         description: "Failed to delete comment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resendEmailMutation = useMutation({
+    mutationFn: () => transactionsApi.resendEmail(id!),
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Email sent successfully",
+      });
+    },
+    onError: (error: unknown) => {
+      let message = "Failed to send email";
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { message?: string } } };
+        const backendMessage = axiosError.response?.data?.message;
+        if (backendMessage) {
+          message = backendMessage;
+        }
+      }
+      toast({
+        title: "Error",
+        description: message,
         variant: "destructive",
       });
     },
@@ -210,10 +235,23 @@ export default function TransactionDetails() {
               </p>
             </div>
           </div>
-          <Button onClick={handleCreateCase} className="gap-2">
-            <FileText className="h-4 w-4" />
-            Create Case
-          </Button>
+          <div className="flex gap-2">
+            {transaction.isFlagged && transaction.email && (currentUser?.role === "Admin" || currentUser?.role === "Analyst") && (
+              <Button 
+                onClick={() => resendEmailMutation.mutate()} 
+                variant="outline"
+                className="gap-2"
+                disabled={resendEmailMutation.isPending}
+              >
+                <Mail className="h-4 w-4" />
+                {resendEmailMutation.isPending ? "Sending..." : "Resend Email"}
+              </Button>
+            )}
+            <Button onClick={handleCreateCase} className="gap-2">
+              <FileText className="h-4 w-4" />
+              Create Case
+            </Button>
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

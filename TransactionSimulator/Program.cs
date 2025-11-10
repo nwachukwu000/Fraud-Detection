@@ -107,6 +107,18 @@ class Program
             Console.WriteLine($"  Risk Score: {response.RiskScore}");
             Console.WriteLine($"  Status: {response.Status}");
             Console.WriteLine($"  Flagged: {(response.IsFlagged ? "Yes" : "No")}");
+            if (!string.IsNullOrWhiteSpace(response.Email))
+            {
+                Console.WriteLine($"  Email: {response.Email}");
+                if (response.IsFlagged)
+                {
+                    Console.WriteLine($"  ✓ Fraud alert email sent to {response.Email}");
+                }
+            }
+            else if (response.IsFlagged)
+            {
+                Console.WriteLine($"  ⚠ Warning: Transaction is flagged but no email address provided - no notification sent");
+            }
         }
         catch (Exception ex)
         {
@@ -146,12 +158,21 @@ class Program
                 {
                     Amount = baseTransaction.Amount + (i * 1000),
                     SenderAccountNumber = baseTransaction.SenderAccountNumber.Replace("XXX", i.ToString("000")),
-                    ReceiverAccountNumber = baseTransaction.ReceiverAccountNumber.Replace("XXX", i.ToString("000"))
+                    ReceiverAccountNumber = baseTransaction.ReceiverAccountNumber.Replace("XXX", i.ToString("000")),
+                    Email = baseTransaction.Email // Preserve email from base transaction
                 };
 
                 var response = await apiClient.CreateTransactionAsync(transaction);
                 successCount++;
-                Console.WriteLine($"  [{i}/{count}] ✓ Created - Risk Score: {response.RiskScore}");
+                var emailInfo = !string.IsNullOrWhiteSpace(response.Email) 
+                    ? $" | Email: {response.Email}" 
+                    : "";
+                var emailSent = response.IsFlagged && !string.IsNullOrWhiteSpace(response.Email) 
+                    ? " | Email sent ✓" 
+                    : response.IsFlagged 
+                    ? " | ⚠ No email" 
+                    : "";
+                Console.WriteLine($"  [{i}/{count}] ✓ Created - Risk Score: {response.RiskScore}{emailInfo}{emailSent}");
                 
                 // Small delay to avoid overwhelming the API
                 await Task.Delay(100);
@@ -208,7 +229,8 @@ class Program
                     Amount: random.Next(10000, 5000000),
                     Location: locations[random.Next(locations.Length)],
                     Device: devices[random.Next(devices.Length)],
-                    IpAddress: $"192.168.{random.Next(1, 255)}.{random.Next(1, 255)}"
+                    IpAddress: $"192.168.{random.Next(1, 255)}.{random.Next(1, 255)}",
+                    Email: random.Next(0, 100) < 70 ? $"customer{random.Next(1000, 9999)}@example.com" : null // 70% chance of having email
                 );
 
                 try
@@ -216,7 +238,15 @@ class Program
                     var response = await apiClient.CreateTransactionAsync(transaction);
                     successCount++;
                     var riskIndicator = response.RiskScore > 50 ? "⚠ HIGH RISK" : response.RiskScore > 0 ? "⚠ MEDIUM" : "✓ LOW";
-                    Console.WriteLine($"[{i}/{count}] {riskIndicator} - Amount: {response.Amount:C}, Risk: {response.RiskScore}, Type: {transaction.TransactionType}");
+                    var emailInfo = !string.IsNullOrWhiteSpace(response.Email) 
+                        ? $", Email: {response.Email}" 
+                        : "";
+                    var emailSent = response.IsFlagged && !string.IsNullOrWhiteSpace(response.Email) 
+                        ? " | Email sent ✓" 
+                        : response.IsFlagged 
+                        ? " | ⚠ No email" 
+                        : "";
+                    Console.WriteLine($"[{i}/{count}] {riskIndicator} - Amount: {response.Amount:C}, Risk: {response.RiskScore}, Type: {transaction.TransactionType}{emailInfo}{emailSent}");
                 }
                 catch (Exception ex)
                 {
@@ -278,6 +308,10 @@ class Program
         var ipAddress = Console.ReadLine()?.Trim();
         if (string.IsNullOrWhiteSpace(ipAddress)) ipAddress = null;
 
+        Console.Write("Email Address (optional, for fraud alert notifications): ");
+        var email = Console.ReadLine()?.Trim();
+        if (string.IsNullOrWhiteSpace(email)) email = null;
+
         return new TransactionRequest(
             senderAccount,
             receiverAccount,
@@ -285,7 +319,8 @@ class Program
             amount,
             location,
             device,
-            ipAddress
+            ipAddress,
+            email
         );
     }
 

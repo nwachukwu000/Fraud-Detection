@@ -28,7 +28,7 @@ public class CasesController : BaseController
         var rules = await _db.Rules.Where(r => r.IsEnabled).ToListAsync();
         var riskScore = FDMA.Application.Services.RuleEngine.ComputeRiskScore(transaction, rules);
         
-        if (riskScore <= 0)
+        if (riskScore.Score <= 0)
             return BadRequest(new { message = "Cannot create case for transaction with risk score 0 or below" });
 
         var caseEntity = new Case

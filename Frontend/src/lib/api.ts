@@ -56,6 +56,7 @@ export interface Transaction {
   location?: string;
   device?: string;
   ipAddress?: string;
+  email?: string;
   createdAt: string;
   amount: number;
   riskScore: number;
@@ -120,8 +121,9 @@ export interface Rule {
 
 export interface Notification {
   id: string;
-  message: string;
-  type: string;
+  text: string;
+  message?: string; // For backward compatibility
+  type?: string;
   markedAsRead: boolean;
   createdAt: string;
 }
@@ -167,6 +169,7 @@ export const transactionsApi = {
     location?: string;
     device?: string;
     ipAddress?: string;
+    email?: string;
   }): Promise<Transaction> => {
     const response = await api.post<Transaction>('/transactions', data);
     return response.data;
@@ -174,6 +177,11 @@ export const transactionsApi = {
 
   flag: async (id: string, isFlagged: boolean = true): Promise<void> => {
     await api.put(`/transactions/${id}/flag`, null, { params: { isFlagged } });
+  },
+
+  resendEmail: async (id: string): Promise<{ message: string }> => {
+    const response = await api.post<{ message: string }>(`/transactions/${id}/resend-email`);
+    return response.data;
   },
 };
 

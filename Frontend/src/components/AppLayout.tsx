@@ -55,10 +55,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [currentUser]);
 
   // Fetch notifications
-  const { data: notifications = [] } = useQuery({
+  const { data: notifications = [], error: notificationsError } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => notificationsApi.getList(),
     refetchInterval: 30000, // Refetch every 30 seconds
+    retry: 1,
+    onError: (error) => {
+      console.error("Error fetching notifications:", error);
+    },
   });
 
   // Get unread notifications count
@@ -102,7 +106,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <ScrollArea className="h-[400px]">
-                    {notifications.length === 0 ? (
+                    {notificationsError ? (
+                      <div className="p-4 text-center text-sm text-destructive">
+                        Error loading notifications. Please refresh.
+                      </div>
+                    ) : notifications.length === 0 ? (
                       <div className="p-4 text-center text-sm text-muted-foreground">
                         No notifications
                       </div>
@@ -122,7 +130,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     : "text-muted-foreground"
                                 }`}
                               >
-                                {notification.message}
+                                {notification.text || notification.message}
                               </p>
                               <p className="text-xs text-muted-foreground mt-1">
                                 {format(

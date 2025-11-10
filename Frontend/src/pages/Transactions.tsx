@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Download, Plus, Loader2 } from "lucide-react";
+import { Search, Download, Plus, Loader2, Mail } from "lucide-react";
 import { transactionsApi } from "@/lib/api";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -38,9 +38,34 @@ export default function Transactions() {
     amount: "",
     location: "",
     device: "",
+    email: "",
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const resendEmailMutation = useMutation({
+    mutationFn: (id: string) => transactionsApi.resendEmail(id),
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Email sent successfully",
+      });
+    },
+    onError: (error: unknown) => {
+      let message = "Failed to send email";
+      if (isAxiosError(error)) {
+        const backendMessage = (error.response?.data as { message?: string } | undefined)?.message;
+        if (backendMessage) {
+          message = backendMessage;
+        }
+      }
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["transactions", page, pageSize, statusFilter, riskFilter, searchQuery],
@@ -80,6 +105,7 @@ export default function Transactions() {
       amount: number;
       location?: string;
       device?: string;
+      email?: string;
     }) => transactionsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
@@ -91,6 +117,7 @@ export default function Transactions() {
         amount: "",
         location: "",
         device: "",
+        email: "",
       });
       toast({
         title: "Success",
@@ -143,6 +170,7 @@ export default function Transactions() {
       amount,
       location: transactionForm.location || undefined,
       device: transactionForm.device || undefined,
+      email: transactionForm.email || undefined,
     });
   };
 
@@ -274,14 +302,28 @@ export default function Transactions() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Button 
-                                variant="link" 
-                                size="sm" 
-                                className="text-primary"
-                                onClick={() => navigate(`/transactions/${transaction.id}`)}
-                              >
-                                View Details
-                              </Button>
+                              <div className="flex gap-2 items-center">
+                                {transaction.isFlagged && transaction.email && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => resendEmailMutation.mutate(transaction.id)}
+                                    disabled={resendEmailMutation.isPending}
+                                    title="Resend fraud alert email"
+                                  >
+                                    <Mail className="h-4 w-4 mr-1" />
+                                    {resendEmailMutation.isPending ? "Sending..." : "Resend Email"}
+                                  </Button>
+                                )}
+                                <Button 
+                                  variant="link" 
+                                  size="sm" 
+                                  className="text-primary"
+                                  onClick={() => navigate(`/transactions/${transaction.id}`)}
+                                >
+                                  View Details
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -421,6 +463,21 @@ export default function Transactions() {
                       }
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address (Optional)</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="customer@example.com"
+                    value={transactionForm.email}
+                    onChange={(e) =>
+                      setTransactionForm({ ...transactionForm, email: e.target.value })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Email address for fraud alert notifications (required for flagged transactions)
+                  </p>
                 </div>
               </div>
               <DialogFooter>

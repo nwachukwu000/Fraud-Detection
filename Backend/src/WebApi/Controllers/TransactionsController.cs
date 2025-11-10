@@ -4,6 +4,7 @@ using FDMA.Domain.Entities;
 using FDMA.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace FDMA.WebApi.Controllers;
@@ -15,10 +16,12 @@ public class TransactionsController : BaseController
 {
     private readonly ITransactionService _service;
     private readonly AppDbContext _db;
-    public TransactionsController(ITransactionService service, AppDbContext db)
+    private readonly IEmailService? _emailService;
+    public TransactionsController(ITransactionService service, AppDbContext db, IEmailService? emailService = null)
     {
         _service = service;
         _db = db;
+        _emailService = emailService;
     }
 
     [HttpGet]
@@ -62,6 +65,7 @@ public class TransactionsController : BaseController
             Location = req.Location,
             Device = req.Device,
             IpAddress = req.IpAddress,
+            Email = req.Email,
             CreatedAt = DateTime.UtcNow,
             Status = "Normal" // Will be updated by CreateAsync based on risk score
         };
@@ -84,5 +88,58 @@ public class TransactionsController : BaseController
         await _db.SaveChangesAsync();
         
         return NoContent();
+    }
+
+    [HttpPost("{id:guid}/resend-email")]
+    [Authorize(Roles = "Admin,Analyst")]
+    public async Task<IActionResult> ResendEmail(Guid id)
+    {
+        var transaction = await _service.GetByIdAsync(id);
+        if (transaction is null)
+            return NotFound(new { message = "Transaction not found" });
+
+        if (!transaction.IsFlagged)
+            return BadRequest(new { message = "Email can only be sent for flagged transactions" });
+
+        if (string.IsNullOrWhiteSpace(transaction.Email))
+            return BadRequest(new { message = "Transaction does not have an email address" });
+
+        if (_emailService is null)
+            return StatusCode(500, new { message = "Email service is not configured" });
+
+        try
+        {
+            // Get admin emails
+            List<string>? adminEmails = null;
+            var adminUsers = _db.Set<User>()
+                .Where(u => u.Role == "Admin" && !string.IsNullOrWhiteSpace(u.Email))
+                .Select(u => u.Email!)
+                .ToList();
+            if (adminUsers.Any())
+            {
+                adminEmails = adminUsers;
+            }
+
+            await _emailService.SendFlaggedTransactionEmailAsync(
+                transaction.Email,
+                transaction.Id.ToString(),
+                transaction.Amount,
+                transaction.RiskScore,
+                transaction.TransactionType,
+                transaction.CreatedAt,
+                transaction.Location,
+                adminEmails
+            );
+
+            CreateAuditLog(_db, "Email Resent", "Transaction", id, 
+                $"Email resent to {transaction.Email}");
+            await _db.SaveChangesAsync();
+
+            return Ok(new { message = "Email sent successfully" });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Failed to send email: {ex.Message}" });
+        }
     }
 }

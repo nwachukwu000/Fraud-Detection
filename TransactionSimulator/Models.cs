@@ -13,7 +13,8 @@ public record TransactionRequest(
     decimal Amount,
     string? Location,
     string? Device,
-    string? IpAddress
+    string? IpAddress,
+    string? Email
 );
 
 public record TransactionResponse(
@@ -26,6 +27,7 @@ public record TransactionResponse(
     string? Location,
     string? Device,
     string? IpAddress,
+    string? Email,
     DateTime CreatedAt,
     decimal Amount,
     int RiskScore

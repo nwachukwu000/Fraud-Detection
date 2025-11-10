@@ -167,8 +167,8 @@ export default function Dashboard() {
                   {transactionsLoading ? (
                     <Loader2 className="h-6 w-6 animate-spin" />
                   ) : (
-                    totalAmount >= 1000000
-                      ? `₦${(totalAmount / 1000000).toFixed(1)}M`
+                    totalAmount >= 1_000_000
+                      ? `₦${Number((totalAmount / 1_000_000).toFixed(1)).toLocaleString()}M`
                       : totalAmount >= 1000
                       ? `₦${(totalAmount / 1000).toFixed(1)}K`
                       : `₦${totalAmount.toLocaleString()}`

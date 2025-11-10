@@ -3,6 +3,7 @@ using FDMA.Application.Interfaces;
 using FDMA.Application.Services;
 using FDMA.Domain.Entities;
 using FDMA.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace FDMA.Infrastructure.Services;
@@ -10,16 +11,23 @@ namespace FDMA.Infrastructure.Services;
 public class TransactionService : ITransactionService
 {
     private readonly AppDbContext _db;
+    private readonly IEmailService? _emailService;
+    private readonly UserManager<User>? _userManager;
 
-    public TransactionService(AppDbContext db) => _db = db;
+    public TransactionService(AppDbContext db, IEmailService? emailService = null, UserManager<User>? userManager = null)
+    {
+        _db = db;
+        _emailService = emailService;
+        _userManager = userManager;
+    }
 
     private static void ApplyRiskScores(IEnumerable<Transaction> transactions, IReadOnlyCollection<Rule> rules)
     {
         foreach (var tx in transactions)
         {
             var risk = RuleEngine.ComputeRiskScore(tx, rules);
-            tx.RiskScore = risk;
-            tx.IsFlagged = risk > 0;
+            tx.RiskScore = risk.Score;
+            tx.IsFlagged = risk.Score > 0;
             // Update status based on flagged status
             tx.Status = tx.IsFlagged ? "Flagged" : "Normal";
         }
@@ -34,16 +42,54 @@ public class TransactionService : ITransactionService
         await _db.SaveChangesAsync();
         if (tx.IsFlagged)
         {
+            var severity = tx.RiskScore >= 80 ? FDMA.Domain.Enums.AlertSeverity.High : tx.RiskScore >= 50 ? FDMA.Domain.Enums.AlertSeverity.Medium : FDMA.Domain.Enums.AlertSeverity.Low;
             _db.Alerts.Add(new Alert
             {
                 Id = Guid.NewGuid(),
                 TransactionId = tx.Id,
-                Severity = tx.RiskScore >= 80 ? FDMA.Domain.Enums.AlertSeverity.High : tx.RiskScore >= 50 ? FDMA.Domain.Enums.AlertSeverity.Medium : FDMA.Domain.Enums.AlertSeverity.Low,
+                Severity = $"{severity}",
                 Status = FDMA.Domain.Enums.AlertStatus.Pending,
                 RuleName = "RuleEngine:AutoFlag",
                 CreatedAt = DateTime.UtcNow
             });
             await _db.SaveChangesAsync();
+
+            // Send email notification if email is provided
+            if (_emailService != null && !string.IsNullOrWhiteSpace(tx.Email))
+            {
+                try
+                {
+                    // Get admin emails
+                    List<string>? adminEmails = null;
+                    if (_userManager != null)
+                    {
+                        var adminUsers = await _userManager.Users
+                            .Where(u => u.Role == "Admin" && !string.IsNullOrWhiteSpace(u.Email))
+                            .Select(u => u.Email!)
+                            .ToListAsync();
+                        if (adminUsers.Any())
+                        {
+                            adminEmails = adminUsers;
+                        }
+                    }
+
+                    await _emailService.SendFlaggedTransactionEmailAsync(
+                        tx.Email,
+                        tx.Id.ToString(),
+                        tx.Amount,
+                        tx.RiskScore,
+                        tx.TransactionType,
+                        tx.CreatedAt,
+                        tx.Location,
+                        adminEmails
+                    );
+                }
+                catch (Exception ex)
+                {
+                    // Log error but don't fail the transaction creation
+                    Console.WriteLine($"Error sending email notification: {ex.Message}");
+                }
+            }
         }
         return tx;
     }

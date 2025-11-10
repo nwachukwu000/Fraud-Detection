@@ -1,3 +1,4 @@
+using FDMA.Application.DTOs;
 using FDMA.Domain.Entities;
 using FDMA.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -29,7 +30,7 @@ public class InAppNotificationsController : ControllerBase
             .OrderByDescending(n => n.CreatedAt)
             .ToListAsync();
 
-        return Ok(notifications);
+        return Ok(notifications.Select(NotificationResponse.FromEntity));
     }
 
     [HttpPut("{id:guid}/mark-read")]

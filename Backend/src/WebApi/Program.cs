@@ -5,6 +5,7 @@ using FDMA.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
@@ -77,8 +78,12 @@ builder.Services.AddAuthorization(options =>
 });
 
 // DI
+builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IAlertService, AlertService>();
+
+// Background Services
+builder.Services.AddHostedService<EmailReplyMonitorService>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -99,7 +104,12 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.WriteIndented = false;
+    });
 
 var app = builder.Build();
 
